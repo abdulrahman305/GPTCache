@@ -11,3 +11,7 @@ sphinx-panels
 sphinx_copybutton
 m2r2
 sphinx_toolbox
+jupyter-server>=2.14.1 # not directly required, pinned by Snyk to avoid a vulnerability
+markdown-it-py>=2.2.0 # not directly required, pinned by Snyk to avoid a vulnerability
+mistune>=2.0.3 # not directly required, pinned by Snyk to avoid a vulnerability
+nbconvert>=6.3.0b0 # not directly required, pinned by Snyk to avoid a vulnerability
