@@ -15,7 +15,7 @@ pytest-html==3.1.1
 pytest-sugar==0.9.5
 pytest-parallel
 psycopg2-binary
-transformers==4.29.2
+transformers==4.38.0
 anyio==3.6.2
 torch
 mock
@@ -24,7 +24,7 @@ spacy
 safetensors
 typing_extensions<4.6.0
 stability-sdk
-grpcio==1.53.0
-protobuf==3.20.0
+grpcio==1.53.2
+protobuf==3.20.2
 milvus==2.2.8
 pymilvus==2.2.8
