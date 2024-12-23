@@ -374,3 +374,312 @@ curl -X 'POST' \
  >>> client.get("Hi")
  'Hi back'
  ```
+
+### Troubleshooting
+
+This section provides solutions to common issues that users may encounter while using GPTCache.
+
+#### Issue: Cache Misses
+
+**Possible Causes:**
+1. The similarity threshold is set too high.
+2. The embedding function is not generating accurate embeddings.
+3. The evaluation function is not correctly identifying similar queries.
+
+**Solutions:**
+1. Lower the similarity threshold in the `Config` object.
+2. Verify that the embedding function is generating accurate embeddings by testing it with known inputs and outputs.
+3. Ensure that the evaluation function is correctly identifying similar queries by testing it with known inputs and outputs.
+
+#### Issue: Slow Performance
+
+**Possible Causes:**
+1. The embedding function is slow.
+2. The vector storage is not optimized.
+3. The cache size is too large.
+
+**Solutions:**
+1. Optimize the embedding function or use a faster one.
+2. Optimize the vector storage by using a more efficient vector search library or database.
+3. Reduce the cache size or implement an eviction policy to remove old or less frequently accessed data.
+
+#### Issue: Errors During Initialization
+
+**Possible Causes:**
+1. Incorrect configuration settings.
+2. Missing dependencies.
+
+**Solutions:**
+1. Verify that all configuration settings are correct and match the expected values.
+2. Ensure that all required dependencies are installed and properly configured.
+
+### API Reference Guide
+
+This section provides a comprehensive reference guide for all public functions and classes in the GPTCache repository.
+
+#### Cache Class
+
+```python
+class Cache:
+    def init(self,
+             cache_enable_func=cache_all,
+             pre_embedding_func=last_content,
+             embedding_func=string_embedding,
+             data_manager: DataManager = get_data_manager(),
+             similarity_evaluation=ExactMatchEvaluation(),
+             post_process_messages_func=first,
+             config=Config(),
+             next_cache=None,
+             **kwargs
+             ):
+        """
+        Initialize the GPTCache.
+
+        :param cache_enable_func: Function to enable cache, defaults to cache_all.
+        :param pre_embedding_func: Function to preprocess embedding, defaults to last_content.
+        :param embedding_func: Function to generate embeddings, defaults to string_embedding.
+        :param data_manager: Data manager for cache storage, defaults to get_data_manager().
+        :param similarity_evaluation: Function to evaluate similarity, defaults to ExactMatchEvaluation().
+        :param post_process_messages_func: Function to post-process messages, defaults to first.
+        :param config: Configuration object, defaults to Config().
+        :param next_cache: Next cache in the chain, defaults to None.
+        :param kwargs: Additional keyword arguments.
+        """
+        self.has_init = True
+        self.cache_enable_func = cache_enable_func
+        self.pre_embedding_func = pre_embedding_func
+        self.embedding_func = embedding_func
+        self.data_manager: DataManager = data_manager
+        self.similarity_evaluation = similarity_evaluation
+        self.post_process_messages_func = post_process_messages_func
+        self.data_manager.init(**kwargs)
+        self.config = config
+        self.next_cache = next_cache
+
+    def import_data(self, questions: List[Any], answers: List[Any], session_ids: Optional[List[Optional[str]]] = None) -> None:
+        """
+        Import data to GPTCache.
+
+        :param questions: List of preprocessed question data.
+        :param answers: List of answers to questions.
+        :param session_ids: List of session IDs, optional.
+        :return: None
+        """
+        self.data_manager.import_data(
+            questions=questions,
+            answers=answers,
+            embedding_datas=[self.embedding_func(question) for question in questions],
+            session_ids=session_ids if session_ids else [None for _ in range(len(questions))],
+        )
+
+    def flush(self):
+        """
+        Flush data to prevent accidental loss of memory data.
+
+        :return: None
+        """
+        self.data_manager.flush()
+        if self.next_cache:
+            self.next_cache.data_manager.flush()
+
+    @staticmethod
+    def set_openai_key():
+        """
+        Set the OpenAI API key.
+
+        :return: None
+        """
+        import_openai()
+        import openai  # pylint: disable=C0415
+
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    @staticmethod
+    def set_azure_openai_key():
+        """
+        Set the Azure OpenAI API key.
+
+        :return: None
+        """
+        import_openai()
+        import openai  # pylint: disable=C0415
+
+        openai.api_type = "azure"
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_base = os.getenv("OPENAI_API_BASE")
+        openai.api_version = os.getenv("OPENAI_API_VERSION")
+```
+
+#### DataManager Class
+
+```python
+class DataManager:
+    def __init__(self, cache_base: CacheBase, vector_base: VectorBase, max_size: int = 100000, eviction: str = 'LRU'):
+        """
+        Initialize the DataManager.
+
+        :param cache_base: Cache base for scalar data storage.
+        :param vector_base: Vector base for vector data storage.
+        :param max_size: Maximum cache size, defaults to 100000.
+        :param eviction: Eviction policy, defaults to 'LRU'.
+        """
+        self.cache_base = cache_base
+        self.vector_base = vector_base
+        self.max_size = max_size
+        self.eviction = eviction
+
+    def init(self, **kwargs):
+        """
+        Initialize the data manager.
+
+        :param kwargs: Additional keyword arguments.
+        :return: None
+        """
+        self.cache_base.init(**kwargs)
+        self.vector_base.init(**kwargs)
+
+    def import_data(self, questions: List[Any], answers: List[Any], embedding_datas: List[Any], session_ids: Optional[List[Optional[str]]] = None):
+        """
+        Import data to the data manager.
+
+        :param questions: List of preprocessed question data.
+        :param answers: List of answers to questions.
+        :param embedding_datas: List of embedding data.
+        :param session_ids: List of session IDs, optional.
+        :return: None
+        """
+        self.cache_base.import_data(questions, answers, session_ids)
+        self.vector_base.import_data(embedding_datas)
+
+    def flush(self):
+        """
+        Flush data to prevent accidental loss of memory data.
+
+        :return: None
+        """
+        self.cache_base.flush()
+        self.vector_base.flush()
+
+    def close(self):
+        """
+        Close the data manager.
+
+        :return: None
+        """
+        self.cache_base.close()
+        self.vector_base.close()
+```
+
+#### Config Class
+
+```python
+class Config:
+    def __init__(self, similarity_threshold: float = 0.8, log_time_func: Optional[Callable[[str, float], None]] = None, enable_token_counter: bool = False):
+        """
+        Initialize the Config object.
+
+        :param similarity_threshold: Similarity threshold for cache hits, defaults to 0.8.
+        :param log_time_func: Function to log time-consuming operations, optional.
+        :param enable_token_counter: Flag to enable token counter, defaults to False.
+        """
+        self.similarity_threshold = similarity_threshold
+        self.log_time_func = log_time_func
+        self.enable_token_counter = enable_token_counter
+```
+
+### Comments and Docstrings
+
+To improve code readability and maintainability, we have added comments and docstrings to the code. These comments and docstrings provide explanations for the purpose and functionality of each function and class, making it easier for developers to understand and work with the codebase.
+
+```python
+class Cache:
+    def init(self,
+             cache_enable_func=cache_all,
+             pre_embedding_func=last_content,
+             embedding_func=string_embedding,
+             data_manager: DataManager = get_data_manager(),
+             similarity_evaluation=ExactMatchEvaluation(),
+             post_process_messages_func=first,
+             config=Config(),
+             next_cache=None,
+             **kwargs
+             ):
+        """
+        Initialize the GPTCache.
+
+        :param cache_enable_func: Function to enable cache, defaults to cache_all.
+        :param pre_embedding_func: Function to preprocess embedding, defaults to last_content.
+        :param embedding_func: Function to generate embeddings, defaults to string_embedding.
+        :param data_manager: Data manager for cache storage, defaults to get_data_manager().
+        :param similarity_evaluation: Function to evaluate similarity, defaults to ExactMatchEvaluation.
+        :param post_process_messages_func: Function to post-process messages, defaults to first.
+        :param config: Configuration object, defaults to Config().
+        :param next_cache: Next cache in the chain, defaults to None.
+        :param kwargs: Additional keyword arguments.
+        """
+        self.has_init = True
+        self.cache_enable_func = cache_enable_func
+        self.pre_embedding_func = pre_embedding_func
+        self.embedding_func = embedding_func
+        self.data_manager: DataManager = data_manager
+        self.similarity_evaluation = similarity_evaluation
+        self.post_process_messages_func = post_process_messages_func
+        self.data_manager.init(**kwargs)
+        self.config = config
+        self.next_cache = next_cache
+
+    def import_data(self, questions: List[Any], answers: List[Any], session_ids: Optional[List[Optional[str]]] = None) -> None:
+        """
+        Import data to GPTCache.
+
+        :param questions: List of preprocessed question data.
+        :param answers: List of answers to questions.
+        :param session_ids: List of session IDs, optional.
+        :return: None
+        """
+        self.data_manager.import_data(
+            questions=questions,
+            answers=answers,
+            embedding_datas=[self.embedding_func(question) for question in questions],
+            session_ids=session_ids if session_ids else [None for _ in range(len(questions))],
+        )
+
+    def flush(self):
+        """
+        Flush data to prevent accidental loss of memory data.
+
+        :return: None
+        """
+        self.data_manager.flush()
+        if self.next_cache:
+            self.next_cache.data_manager.flush()
+
+    @staticmethod
+    def set_openai_key():
+        """
+        Set the OpenAI API key.
+
+        :return: None
+        """
+        import_openai()
+        import openai  # pylint: disable=C0415
+
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    @staticmethod
+    def set_azure_openai_key():
+        """
+        Set the Azure OpenAI API key.
+
+        :return: None
+        """
+        import_openai()
+        import openai  # pylint: disable=C0415
+
+        openai.api_type = "azure"
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_base = os.getenv("OPENAI_API_BASE")
+        openai.api_version = os.getenv("OPENAI_API_VERSION")
+```
+
+By following these guidelines and incorporating the provided explanations, examples, troubleshooting section, API reference guide, and comments/docstrings, users will have a comprehensive understanding of how to use GPTCache effectively and efficiently.
