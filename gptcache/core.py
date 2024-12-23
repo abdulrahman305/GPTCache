@@ -14,6 +14,9 @@ from gptcache.similarity_evaluation import SimilarityEvaluation
 from gptcache.utils import import_openai
 from gptcache.utils.cache_func import cache_all
 from gptcache.utils.log import gptcache_log
+import cProfile
+import pstats
+import functools
 
 
 class Cache:
@@ -127,5 +130,24 @@ class Cache:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         openai.api_base = os.getenv("OPENAI_API_BASE")
         openai.api_version = os.getenv("OPENAI_API_VERSION")
+
+    def profile_code(self, func):
+        """Decorator to profile a function and print the stats."""
+        @functools.wraps(func)
+        def wrapper_profile_code(*args, **kwargs):
+            profiler = cProfile.Profile()
+            profiler.enable()
+            result = func(*args, **kwargs)
+            profiler.disable()
+            stats = pstats.Stats(profiler).sort_stats('cumtime')
+            stats.print_stats()
+            return result
+        return wrapper_profile_code
+
+    @profile_code
+    def optimized_function(self, *args, **kwargs):
+        """Example function to demonstrate profiling and optimization."""
+        # Your optimized code here
+        pass
 
 cache = Cache()

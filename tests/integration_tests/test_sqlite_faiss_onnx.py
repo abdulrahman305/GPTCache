@@ -233,3 +233,108 @@ class TestSqliteFaiss(Base):
             is_exception = True
 
         assert is_exception
+
+    @pytest.mark.tags("L1")
+    def test_edge_case_empty_question(self):
+        """
+        target: test edge case with empty question
+        method: provide an empty question
+        expected: raise exception and report the error
+        """
+        onnx = Onnx()
+        vector_base = VectorBase("faiss", dimension=onnx.dimension)
+        data_manager = get_data_manager("sqlite", vector_base, max_size=2000)
+        cache.init(
+            embedding_func=onnx.to_embeddings,
+            data_manager=data_manager,
+            similarity_evaluation=SearchDistanceEvaluation(),
+            config=Config(
+                log_time_func=cf.log_time_func,
+                similarity_threshold=0.8,
+            ),
+        )
+
+        question = ""
+        answer = "chatgpt is a good application"
+        cache.data_manager.save(question, answer, cache.embedding_func(question))
+
+        is_exception = False
+        try:
+            openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question},
+                ],
+            )
+        except Exception as e:
+            log.info(e)
+            is_exception = True
+
+        assert is_exception
+
+    @pytest.mark.tags("L1")
+    def test_edge_case_long_question(self):
+        """
+        target: test edge case with a very long question
+        method: provide a very long question
+        expected: hit successfully
+        """
+        onnx = Onnx()
+        vector_base = VectorBase("faiss", dimension=onnx.dimension)
+        data_manager = get_data_manager("sqlite", vector_base, max_size=2000)
+        cache.init(
+            embedding_func=onnx.to_embeddings,
+            data_manager=data_manager,
+            similarity_evaluation=SearchDistanceEvaluation(),
+            config=Config(
+                log_time_func=cf.log_time_func,
+                similarity_threshold=0.8,
+            ),
+        )
+
+        question = "a" * 10000
+        answer = "chatgpt is a good application"
+        cache.data_manager.save(question, answer, cache.embedding_func(question))
+
+        openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question},
+            ],
+        )
+
+    @pytest.mark.tags("L1")
+    def test_end_to_end(self):
+        """
+        target: test end-to-end functionality
+        method: initialize cache, save question-answer pair, and retrieve it
+        expected: hit successfully
+        """
+        onnx = Onnx()
+        vector_base = VectorBase("faiss", dimension=onnx.dimension)
+        data_manager = get_data_manager("sqlite", vector_base, max_size=2000)
+        cache.init(
+            embedding_func=onnx.to_embeddings,
+            data_manager=data_manager,
+            similarity_evaluation=SearchDistanceEvaluation(),
+            config=Config(
+                log_time_func=cf.log_time_func,
+                similarity_threshold=0.8,
+            ),
+        )
+
+        question = "what do you think about chatgpt"
+        answer = "chatgpt is a good application"
+        cache.data_manager.save(question, answer, cache.embedding_func(question))
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "what do you feel like chatgpt"},
+            ],
+        )
+
+        assert response["choices"][0]["message"]["content"] == answer
