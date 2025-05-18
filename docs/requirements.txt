@@ -15,3 +15,4 @@ jupyter-server>=2.14.1 # not directly required, pinned by Snyk to avoid a vulner
 markdown-it-py>=2.2.0 # not directly required, pinned by Snyk to avoid a vulnerability
 mistune>=2.0.3 # not directly required, pinned by Snyk to avoid a vulnerability
 nbconvert>=6.3.0b0 # not directly required, pinned by Snyk to avoid a vulnerability
+tornado>=6.5 # not directly required, pinned by Snyk to avoid a vulnerability
